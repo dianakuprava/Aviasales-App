@@ -1,0 +1,79 @@
+.transfersFilter {
+  background: #FFFFFF;
+  border-radius: 5px;
+  width: 232px;
+  height: 252px;
+  box-shadow: 0px 2px 8px rgba(0, 0, 0, 0.1);
+  margin-right: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  .title {
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: #4A4A4A;
+    padding: 20px;
+    margin: 0;
+  }
+
+  .transferOption {
+    display: flex;
+    width: 100%;
+    padding: 8px 20px;
+    margin: 0;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+
+    &:hover {
+      background-color: #F1FCFF;
+    }
+
+    :global {
+      .ant-checkbox {
+        top: 0;
+
+        &-inner {
+          width: 20px;
+          height: 20px;
+          border-radius: 2px;
+          border: 1px solid #9ABBCE;
+          background-color: white;
+
+          &::after {
+            width: 5px;
+            height: 10px;
+            left: 6px;
+            top: 9px;
+            border-width: 2px;
+          }
+        }
+
+        &-checked .ant-checkbox-inner {
+          background-color: white;
+          border-color: #2196F3;
+
+          &::after {
+            border-color: #2196F3;
+          }
+        }
+      }
+
+      .ant-checkbox + span {
+        padding-left: 10px;
+        font-size: 13px;
+        color: #4A4A4A;
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .transfersFilter {
+    width: 100%;
+  }
+}
