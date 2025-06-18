@@ -1,4 +1,4 @@
-import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
+import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 interface TicketSegment {
   origin: string;
@@ -20,6 +20,8 @@ interface TicketsState {
   error: string | null;
   displayedCount: number;
   isAllLoaded: boolean;
+  chunksLoaded: number;
+  totalChunks: number;
 }
 
 const initialState: TicketsState = {
@@ -28,27 +30,52 @@ const initialState: TicketsState = {
   error: null,
   displayedCount: 5,
   isAllLoaded: false,
+  chunksLoaded: 0,
+  totalChunks: 0,
 };
 
-export const fetchTickets = createAsyncThunk(
+export const fetchTickets = createAsyncThunk<void, void, { state: { tickets: TicketsState } }>(
   'tickets/fetchTickets',
-  async (_, { rejectWithValue }) => {
-    const handleError = (message: string) => rejectWithValue(message);
-
+  async (_, { dispatch, getState, rejectWithValue }) => {
     try {
-      const searchResponse = await fetch('https://aviasales-test-api.kata.academy/search');
-      if (!searchResponse.ok) return handleError('Failed to get searchId');
+      const searchRes = await fetch('https://aviasales-test-api.kata.academy/search');
+      if (!searchRes.ok) throw new Error('Не удалось получить searchId');
+      const { searchId } = await searchRes.json();
 
-      const { searchId } = await searchResponse.json();
-      const ticketsResponse = await fetch(
-        `https://aviasales-test-api.kata.academy/tickets?searchId=${searchId}`
-      );
+      let stop = false;
+      let errorCount = 0;
 
-      if (!ticketsResponse.ok) return handleError('Failed to fetch tickets');
+      while (!stop && errorCount < 3) {
+        try {
+          const res = await fetch(
+            `https://aviasales-test-api.kata.academy/tickets?searchId=${searchId}`
+          );
+          if (!res.ok) throw new Error('Ошибка сервера при получении билетов');
 
-      return await ticketsResponse.json();
+          const data = await res.json();
+          dispatch(addTickets(data.tickets));
+          dispatch(incrementChunks());
+
+          const state = getState();
+          const chunksLoaded = state.tickets.chunksLoaded;
+
+          if (!data.stop) {
+            dispatch(setTotalChunks(chunksLoaded + 1));
+          } else {
+            dispatch(setTotalChunks(chunksLoaded));
+          }
+
+          stop = data.stop;
+        } catch (err) {
+          errorCount += 1;
+        }
+      }
+
+      if (errorCount >= 3) {
+        dispatch(setPartialLoad(true));
+      }
     } catch (error) {
-      return handleError(error instanceof Error ? error.message : 'Unknown error');
+      return rejectWithValue(error instanceof Error ? error.message : 'Неизвестная ошибка');
     }
   }
 );
@@ -63,30 +90,47 @@ const ticketsSlice = createSlice({
     resetError: (state) => {
       state.error = null;
     },
+    addTickets: (state, action: PayloadAction<Ticket[]>) => {
+      const existingKeys = new Set(
+        state.items.map(
+          (t) => `${t.price}-${t.carrier}-${t.segments[0].date}-${t.segments[1].date}`
+        )
+      );
+
+      const uniqueNewTickets = action.payload.filter((ticket) => {
+        const key = `${ticket.price}-${ticket.carrier}-${ticket.segments[0].date}-${ticket.segments[1].date}`;
+        return !existingKeys.has(key);
+      });
+
+      state.items.push(...uniqueNewTickets);
+    },
+    incrementChunks: (state) => {
+      state.chunksLoaded += 1;
+    },
+    setPartialLoad: (state, action: PayloadAction<boolean>) => {
+      state.isAllLoaded = action.payload;
+      if (action.payload) {
+        state.error = 'Не все билеты были загружены. Попробуйте обновить позже.';
+      }
+    },
+    setTotalChunks: (state, action: PayloadAction<number>) => {
+      state.totalChunks = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchTickets.pending, (state) => {
         state.loading = true;
         state.error = null;
+        state.items = [];
+        state.isAllLoaded = false;
+        state.chunksLoaded = 0;
+        state.totalChunks = 0;
       })
-      .addCase(fetchTickets.fulfilled, (state, action) => {
+      .addCase(fetchTickets.fulfilled, (state) => {
         state.loading = false;
-
-        const newTickets = action.payload.tickets as Ticket[];
-        const existingKeys = new Set(
-          state.items.map(t =>
-            `${t.price}-${t.carrier}-${t.segments[0].date}-${t.segments[1].date}`
-          )
-        );
-
-        const uniqueNewTickets = newTickets.filter(ticket => {
-          const key = `${ticket.price}-${ticket.carrier}-${ticket.segments[0].date}-${ticket.segments[1].date}`;
-          return !existingKeys.has(key);
-        });
-
-        state.items = [...state.items, ...uniqueNewTickets];
-        state.isAllLoaded = action.payload.stop;
+        state.error = null;
+        state.isAllLoaded = true;
       })
       .addCase(fetchTickets.rejected, (state, action) => {
         state.loading = false;
@@ -95,5 +139,13 @@ const ticketsSlice = createSlice({
   },
 });
 
-export const { showMoreTickets, resetError } = ticketsSlice.actions;
+export const {
+  showMoreTickets,
+  resetError,
+  addTickets,
+  incrementChunks,
+  setPartialLoad,
+  setTotalChunks,
+} = ticketsSlice.actions;
+
 export default ticketsSlice.reducer;
