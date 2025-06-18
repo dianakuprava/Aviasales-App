@@ -1,5 +1,4 @@
-# [Aviasales App](aviasales-app-khaki-seven.vercel.app)
-
+# [Aviasales App](https://aviasales-app-khaki-seven.vercel.app/)
 ## Особенности реализации:
 
 - Redux Toolkit для управления состоянием
